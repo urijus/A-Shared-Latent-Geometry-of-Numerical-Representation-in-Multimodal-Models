@@ -113,11 +113,11 @@ Changing modality produces a larger mismatch: text-trained and image-trained cau
 
 For a source condition $i$ and destination condition $j$, numerical displacements are related using a scaled orthogonal map
 
-$$
+```math
 A_{j \leftarrow i} = \alpha Q,
 \qquad
 Q^\top Q = I.
-$$
+```
 
 The orthogonal component $Q$ changes orientation, while the scalar $\alpha$ changes the global magnitude of the displacement.
 
@@ -135,9 +135,9 @@ The final pre-generation DAS space has dimension $k=22$.
 
 We rotate this space according to its coupling with the centered digit-unembedding span and obtain the exact decomposition
 
-$$
+```math
 R = C \oplus L,
-$$
+```
 
 where
 
@@ -146,9 +146,9 @@ where
 
 By construction,
 
-$$
+```math
 U_{\mathrm{digit}}^\top L \simeq 0.
-$$
+```
 
 Although $L$ alone has little immediate autoregressive effect, it remains strongly organized by numerical identity.
 
@@ -170,19 +170,19 @@ Pairwise transformations between the four condition-specific $L$ spaces can be s
 
 A numerical displacement in condition $i$ can therefore be expressed in common coordinates as
 
-$$
+```math
 \Delta u
 =
 \frac{1}{s_i} U_i^\top \Delta z_i^L,
-$$
+```
 
 and reconstructed in condition $j$ through
 
-$$
+```math
 \Delta z_j^L
 =
 s_j U_j \Delta u.
-$$
+```
 
 Replacing independently fitted pairwise maps with synchronized maps preserves almost all of the held-out numerical geometry:
 
@@ -613,9 +613,9 @@ The condition-specific numerical representations do not generally occupy one ide
 
 The fitted transformations
 
-$$
+```math
 A_{j \leftarrow i} = \alpha Q
-$$
+```
 
 describe correspondences between learned representations.
 
@@ -637,9 +637,9 @@ The common frame should therefore be interpreted as a **relational coordinate de
 
 The decomposition
 
-$$
+```math
 R = C \oplus L
-$$
+```
 
 is constructed inside the learned DAS space according to coupling with the current digit-discriminative readout.
 
