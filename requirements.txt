@@ -1,0 +1,15 @@
+# Direct runtime dependencies. Transitive packages are resolved by pip.
+accelerate==1.13.0
+kokoro==0.9.4
+matplotlib==3.10.9
+numpy==2.2.6
+pandas==2.3.3
+pillow==12.2.0
+PyYAML==6.0.3
+safetensors==0.7.0
+scikit-learn==1.7.2
+scipy==1.15.3
+sentencepiece==0.2.1
+torch==2.6.0
+tqdm==4.67.3
+transformers==5.8.1

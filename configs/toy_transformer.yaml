@@ -1,0 +1,24 @@
+seed: 0
+
+data:
+  train_path: dataset/custom/train.jsonl
+  val_path: dataset/custom/val.jsonl
+  test_path: dataset/custom/test.jsonl
+  max_len: 64
+
+model:
+  d_model: 384
+  n_layers: 4
+  n_heads: 8
+  d_ff: 1536
+  dropout: 0.1
+  causal: True
+
+training:
+  batch_size: 256
+  lr: 3e-4
+  epochs: 150
+  device: cuda
+  patience: 15
+  weight_decay: 0.001
+  use_scheduler: True

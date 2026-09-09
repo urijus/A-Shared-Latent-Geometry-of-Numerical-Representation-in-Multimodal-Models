@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Environments / secrets
+.env
+/.local/
+.venv/
+env/
+venv/
+
+# Caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+__pypackages__/
+
+# Data and generated artifacts
+/dataset/
+/checkpoints/
+/outputs/
+/runs/
+/results_old/
+/results/
+/test/
+/wandb/
+/models/
+/banks/
+
+# Logs
+/logs/*
+!/logs/.gitkeep
+!/logs/slurm/
+/logs/slurm/*
+!/logs/slurm/.gitkeep
+
+# Large ML files
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.npy
+*.npz
+*.pkl
+*.joblib
+
+# Result tables, summaries, figures, and media
+*.json
+*.jsonl
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.png
+*.pdf
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.wav
+*.mp3
+*.mp4
+
+# Cluster outputs
+*.out
+*.err
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
