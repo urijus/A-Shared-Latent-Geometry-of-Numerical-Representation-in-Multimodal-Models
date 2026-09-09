@@ -111,15 +111,15 @@ Changing modality produces a larger mismatch: text-trained and image-trained cau
 
 ### 3. Cross-modal numerical changes are alignable
 
-For a source condition \(i\) and destination condition \(j\), numerical displacements are related using a scaled orthogonal map
+For a source condition $i$ and destination condition $j$, numerical displacements are related using a scaled orthogonal map
 
-\[
+$$
 A_{j \leftarrow i} = \alpha Q,
 \qquad
 Q^\top Q = I.
-\]
+$$
 
-The orthogonal component \(Q\) changes orientation, while the scalar \(\alpha\) changes the global magnitude of the displacement.
+The orthogonal component $Q$ changes orientation, while the scalar $\alpha$ changes the global magnitude of the displacement.
 
 For modality-changing relations, combining the learned orientation and scale recovers approximately **93% of the destination-trained causal effect** on average.
 
@@ -131,28 +131,28 @@ The fitted transformation describes a relationship between representations; it i
 
 ### 4. Numerical geometry survives outside the current digit readout
 
-The final pre-generation DAS space has dimension \(k=22\).
+The final pre-generation DAS space has dimension $k=22$.
 
 We rotate this space according to its coupling with the centered digit-unembedding span and obtain the exact decomposition
 
-\[
+$$
 R = C \oplus L,
-\]
+$$
 
 where
 
-- \(C\) is the **9-dimensional readout-coupled component**, and
-- \(L\) is the **13-dimensional readout-orthogonal component**.
+- $C$ is the **9-dimensional readout-coupled component**, and
+- $L$ is the **13-dimensional readout-orthogonal component**.
 
 By construction,
 
-\[
+$$
 U_{\mathrm{digit}}^\top L \simeq 0.
-\]
+$$
 
-Although \(L\) alone has little immediate autoregressive effect, it remains strongly organized by numerical identity.
+Although $L$ alone has little immediate autoregressive effect, it remains strongly organized by numerical identity.
 
-Across all directed relations between `T+`, `T-`, `I+`, and `I-`, the exact \(L\) spaces achieve approximately
+Across all directed relations between `T+`, `T-`, `I+`, and `I-`, the exact $L$ spaces achieve approximately
 
 - **0.828** mean held-out transition cosine;
 - **75.3%** top-1 retrieval among numerical values excluded from alignment fitting;
@@ -166,23 +166,23 @@ Shuffling numerical identities collapses the effect to chance.
 
 ### 5. The latent spaces admit a common numerical frame
 
-Pairwise transformations between the four condition-specific \(L\) spaces can be synchronized into one orientation \(U_i\) and scale \(s_i\) per condition.
+Pairwise transformations between the four condition-specific $L$ spaces can be synchronized into one orientation $U_i$ and scale $s_i$ per condition.
 
-A numerical displacement in condition \(i\) can therefore be expressed in common coordinates as
+A numerical displacement in condition $i$ can therefore be expressed in common coordinates as
 
-\[
+$$
 \Delta u
 =
 \frac{1}{s_i} U_i^\top \Delta z_i^L,
-\]
+$$
 
-and reconstructed in condition \(j\) through
+and reconstructed in condition $j$ through
 
-\[
+$$
 \Delta z_j^L
 =
 s_j U_j \Delta u.
-\]
+$$
 
 Replacing independently fitted pairwise maps with synchronized maps preserves almost all of the held-out numerical geometry:
 
@@ -204,7 +204,7 @@ This common frame is a coordinate description of the geometry, not a privileged 
 
 ### 6. Modality and operation structure predicts a held-out condition
 
-The controlled \(2\times2\) design allows one complete modality–operation condition to be held out and predicted from the remaining three.
+The controlled $2\times2$ design allows one complete modality–operation condition to be held out and predicted from the remaining three.
 
 The missing-corner geometry reaches approximately
 
@@ -219,14 +219,14 @@ This suggests that modality and operation effects are partially reusable across 
 
 ### 7. Latent numerical identity is reused during autoregressive generation
 
-The causal role of \(C\) and \(L\) differs across autoregressive time.
+The causal role of $C$ and $L$ differs across autoregressive time.
 
 At the final pre-generation position:
 
-- the immediate digit predominantly follows the value encoded by \(C\);
-- changing numerical identity only inside \(L\) redirects the later continuation.
+- the immediate digit predominantly follows the value encoded by $C$;
+- changing numerical identity only inside $L$ redirects the later continuation.
 
-For two-digit values that share their first digit but differ in their second, replacing only the \(L\) component redirects generation toward the alternative numerical value while leaving the shared first digit essentially unchanged.
+For two-digit values that share their first digit but differ in their second, replacing only the $L$ component redirects generation toward the alternative numerical value while leaving the shared first digit essentially unchanged.
 
 At the next autoregressive position, after propagating the intervention through the preserved KV cache, the induced change becomes aligned with the digit-readout geometry corresponding to the new continuation.
 
@@ -467,7 +467,7 @@ These experiments cover
 - digit-unembedding geometry;
 - readout ablations;
 - repeat-number controls;
-- exact \(C/L\) decomposition;
+- exact $C/L$ decomposition;
 - held-out numerical geometry;
 - random and shuffled controls;
 - representational similarity analysis.
@@ -482,7 +482,7 @@ python experiments/04_global_geometry/synchronize_frames.py --help
 
 These experiments cover
 
-- pairwise \(L\)-space alignment;
+- pairwise $L$-space alignment;
 - orthogonal group synchronization;
 - synchronized condition frames;
 - leave-one-relation-out reconstruction;
@@ -499,7 +499,7 @@ python experiments/05_autoregressive_transfer/latent_identity_swap.py --help
 
 These experiments cover
 
-- matched and mismatched \(C/L\) interventions;
+- matched and mismatched $C/L$ interventions;
 - continuation redirection;
 - repeat-number latent geometry;
 - KV-cache propagation;
@@ -613,13 +613,13 @@ The condition-specific numerical representations do not generally occupy one ide
 
 The fitted transformations
 
-\[
+$$
 A_{j \leftarrow i} = \alpha Q
-\]
+$$
 
 describe correspondences between learned representations.
 
-They should not be interpreted as evidence that the model explicitly computes \(Q\) or \(\alpha\) during its forward pass.
+They should not be interpreted as evidence that the model explicitly computes $Q$ or $\alpha$ during its forward pass.
 
 ---
 
@@ -633,13 +633,13 @@ The common frame should therefore be interpreted as a **relational coordinate de
 
 ---
 
-### \(C\) and \(L\) are an analytical decomposition
+### $C$ and $L$ are an analytical decomposition
 
 The decomposition
 
-\[
+$$
 R = C \oplus L
-\]
+$$
 
 is constructed inside the learned DAS space according to coupling with the current digit-discriminative readout.
 
