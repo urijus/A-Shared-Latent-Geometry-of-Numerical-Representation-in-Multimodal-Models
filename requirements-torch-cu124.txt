@@ -1,0 +1,5 @@
+# PyTorch stack used for the CUDA 12.4 environment.
+--index-url https://download.pytorch.org/whl/cu124
+
+torch==2.6.0
+torchvision==0.21.0

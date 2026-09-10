@@ -383,14 +383,36 @@ source .venv/bin/activate
 .venv\Scripts\activate
 ```
 
-Install the runtime dependencies:
+Upgrade `pip`, then install the PyTorch build for the target platform.
+
+**NVIDIA GPU (tested CUDA 12.4 package configuration; Linux or Windows)**
 
 ```bash
 python -m pip install --upgrade pip
+python -m pip install -r requirements-torch-cu124.txt
+```
+
+**CPU only (Linux or Windows)**
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements-torch-cpu.txt
+```
+
+**macOS**
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install torch==2.6.0 torchvision==0.21.0
+```
+
+Install the remaining accelerator-independent dependencies:
+
+```bash
 python -m pip install -r requirements.txt
 ```
 
-Install the PyTorch build appropriate for the accelerator and CUDA environment of the target machine if it is not already provided by the environment.
+The CUDA requirement file selects PyTorch wheels from the official CUDA 12.4 index. The CPU file selects the corresponding CPU-only wheels. `torchaudio` is not required by this repository.
 
 Model aliases and Hugging Face identifiers are defined in
 
