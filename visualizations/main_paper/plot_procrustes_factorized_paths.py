@@ -14,7 +14,7 @@ import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_INPUT_DIR = REPO_ROOT / "results" / "final_exps" / "procrustes" / "factorized_paths"
+DEFAULT_INPUT_DIR = REPO_ROOT / "results" / "paper" / "procrustes" / "factorized_paths"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "visualizations" / "main_paper" / "procrustes" / "factorized_paths"
 
 BACKGROUND = "#fdfdfd"

@@ -86,7 +86,7 @@ def parse_args():
     parser.add_argument("--operation", choices=["addition", "subtraction", "multiplication"], required=True)
     parser.add_argument("--data_path", type=Path)
     parser.add_argument("--data_root", type=Path)
-    parser.add_argument("--output_dir", type=Path, default=Path("results/final_exps/DAS_audit"))
+    parser.add_argument("--output_dir", type=Path, default=Path("results/final_exps/DAS_audit_k_22"))
     parser.add_argument("--layer", type=int, default=43)
     parser.add_argument("--position", default="17")
     parser.add_argument("--hook", choices=["resid_pre", "resid_post"], default="resid_post")
@@ -97,7 +97,7 @@ def parse_args():
         choices=["result", "c0_hat", "c1_hat", "c1_hat_full"],
         default="result",
     )
-    parser.add_argument("--k", type=int, default=32)
+    parser.add_argument("--k", type=int, default=22)
     parser.add_argument("--epochs", type=int, default=8)
     parser.add_argument("--random_init_epochs", type=int, default=40)
     parser.add_argument("--run_random_init", action="store_true")

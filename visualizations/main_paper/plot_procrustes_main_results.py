@@ -24,7 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CAUSAL_DIR = REPO_ROOT / "results" / "final_exps" / "causal_tranfer"
 DEFAULT_PROCRUSTES_DIR = REPO_ROOT / "results" / "final_exps" / "procrustes"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "visualizations" / "main_paper" / "procrustes" / "paper"
-DEFAULT_FACTORIZED_SUMMARY = DEFAULT_PROCRUSTES_DIR / "factorized_paths" / "factorized_paths_summary.jsonl"
+DEFAULT_FACTORIZED_SUMMARY = REPO_ROOT / "results" / "paper" / "procrustes" / "factorized_paths" / "factorized_paths_summary.jsonl"
 
 BACKGROUND = "#fdfdfd"
 PANEL_BG = "#f7f8f8"

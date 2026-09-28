@@ -9,7 +9,7 @@ from src.common.io import load_jsonl, save_jsonl
 from src.models import load_hf_model, resolve_model_for_loading
 
 
-MODEL_NAME = "pythia"
+MODEL_NAME = "gemma4_12b_it"
 
 
 def parse_generated_ints(text):

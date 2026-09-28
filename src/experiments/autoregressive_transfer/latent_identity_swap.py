@@ -105,7 +105,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split_seed", type=int, default=0)
     parser.add_argument("--layer", type=int, default=43)
     parser.add_argument("--k", type=int, default=22)
-    parser.add_argument("--m_readout", type=int, default=5)
+    parser.add_argument("--m_readout", type=int, default=9)
     parser.add_argument(
         "--m_mode",
         choices=["fixed", "global_from_audit", "per_task_from_audit", "per_seed_from_audit"],
