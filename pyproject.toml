@@ -1,0 +1,37 @@
+[project]
+name = "shared-latent-geometry"
+version = "0.1.0"
+description = "Research code for A Shared Latent Geometry of Numerical Representation in Multimodal Models."
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "accelerate==1.13.0",
+    "kokoro==0.9.4",
+    "matplotlib==3.10.9",
+    "numpy==2.2.6",
+    "pandas==2.3.3",
+    "pillow==12.2.0",
+    "PyYAML==6.0.3",
+    "safetensors==0.7.0",
+    "scikit-learn==1.7.2",
+    "scipy==1.15.3",
+    "sentencepiece==0.2.1",
+    "torch==2.6.0",
+    "torchvision==0.21.0",
+    "tqdm==4.67.3",
+    "transformers==5.8.1",
+]
+
+[tool.uv]
+# Scripts run from the repository root, so only the dependencies are installed.
+package = false
+
+# CUDA 12.4 wheels on Linux and Windows, as in requirements-torch-cu124.txt.
+# macOS falls back to the PyPI wheels.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }]
+torchvision = [{ index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true

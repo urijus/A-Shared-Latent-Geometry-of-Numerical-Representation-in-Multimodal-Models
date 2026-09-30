@@ -360,6 +360,23 @@ These directories are not part of the source release.
 
 ## Installation
 
+### With uv
+
+```bash
+git clone <repository-url>
+cd <repository-name>
+
+uv sync
+```
+
+`uv sync` creates `.venv` with the pinned dependencies. On Linux and Windows it installs the CUDA 12.4 PyTorch wheels, and on macOS the PyPI wheels. Run scripts from the repository root with `uv run`, for example
+
+```bash
+uv run python experiments/02_cross_condition_transfer/causal_transfer.py --help
+```
+
+### With pip
+
 Clone the repository and create an isolated Python environment.
 
 ```bash
