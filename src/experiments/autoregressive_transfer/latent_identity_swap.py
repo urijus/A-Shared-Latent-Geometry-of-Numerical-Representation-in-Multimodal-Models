@@ -57,6 +57,7 @@ from src.experiments.arithmetic_reference.das.image.das_image_core import (
     load_rgb_image,
     make_inputs,
     resolve_batch_positions,
+    resolve_prompt_positions,
     sample_prompt,
 )
 from src.experiments.arithmetic_reference.linear_probes.text.extract_activations import uses_chat_template
@@ -514,8 +515,10 @@ def collect_activations(
                 raise ValueError("Image activation collection requires processor and data_root.")
             prompts = [sample_prompt(processor, sample, prompt, enable_thinking) for sample in batch]
             images = [load_rgb_image(image_path_for(sample, data_root)) for sample in batch]
-            positions = resolve_batch_positions(processor, tokenizer, model, prompts, images, position)
             encoding = inputs_to_device(make_inputs(processor, prompts, images), model.device)
+            positions = resolve_batch_positions(
+                processor, tokenizer, model, prompts, images, position, encoding=encoding
+            )
         captured = {}
         with ExitStack() as stack:
             module, pre_hook = hook_module(blocks[layer - 1], hook_name)
@@ -737,7 +740,6 @@ def teacher_forced_scores_image(args, model, processor, tokenizer, blocks, rows:
         batch = rows[start : start + args.batch_size]
         prompts = [sample_prompt(processor, row["base"], args.prompt, args.enable_thinking) for row in batch]
         images = [load_rgb_image(image_path_for(row["base"], data_root)) for row in batch]
-        positions = resolve_batch_positions(processor, tokenizer, model, prompts, images, args.image_position)
         for label in ("d", "c", "base"):
             answers = []
             for row in batch:
@@ -754,6 +756,9 @@ def teacher_forced_scores_image(args, model, processor, tokenizer, blocks, rows:
                 [(0, len(answer)) for answer in answers],
                 images,
                 model.device,
+            )
+            positions = resolve_prompt_positions(
+                processor, tokenizer, model, prompts, images, args.image_position, encoding
             )
             deltas = torch.stack([row["hidden_delta"] for row in batch])
             result = patched_forward_with_deltas(model, encoding, blocks, args.layer, args.hook, positions, deltas)

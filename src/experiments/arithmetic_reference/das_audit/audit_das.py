@@ -13,6 +13,7 @@ different optimizer/minibatch seeds while keeping the data fixed.
 """
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -104,6 +105,7 @@ def parse_args():
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--patience", type=int, default=2)
     parser.add_argument("--pca_max_samples", type=int, default=1024)
+    parser.add_argument("--pca_seed", type=int, default=0, help="Seed set immediately before torch.pca_lowrank.")
     parser.add_argument("--pca_variance_threshold", type=float, default=0.9)
     parser.add_argument("--max_train_pairs", type=int, default=4096)
     parser.add_argument("--max_validation_pairs", type=int, default=512)
@@ -112,7 +114,7 @@ def parse_args():
     parser.add_argument("--validation_fraction", type=float, default=0.15)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_new_tokens", type=int, default=8)
-    parser.add_argument("--max_autoregressive_pairs", type=int, default=32)
+    parser.add_argument("--max_autoregressive_pairs", type=int, default=128)
     parser.add_argument(
         "--prompt",
         default="Output ONLY a number.",
@@ -225,9 +227,12 @@ def pca_basis(pca_space, k, seed):
     return basis
 
 
-def pca_space_with_at_least_k(features, k, variance_threshold):
+def pca_space_with_at_least_k(features, k, variance_threshold, pca_seed):
     centered = features.float() - features.float().mean(dim=0, keepdim=True)
     max_components = min(centered.shape[0] - 1, centered.shape[1], 500)
+    torch.manual_seed(pca_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(pca_seed)
     _, singular_values, components = torch.pca_lowrank(
         centered, q=max_components, center=False, niter=2
     )
@@ -266,6 +271,16 @@ def condition_dir(args, condition):
 def save_condition(args, condition, row, subspace_payload, test_pairs):
     folder = condition_dir(args, condition)
     folder.mkdir(parents=True, exist_ok=True)
+    if "basis" in subspace_payload:
+        basis = subspace_payload["basis"].detach().cpu().contiguous()
+        basis_hash = hashlib.sha256(basis.numpy().tobytes()).hexdigest()
+        row["basis_sha256"] = basis_hash
+        subspace_payload["basis_sha256"] = basis_hash
+    (folder / "config.json").write_text(
+        json.dumps(vars(args), indent=2, default=str) + "\n", encoding="utf-8"
+    )
+    if "history" in subspace_payload:
+        save_jsonl(subspace_payload["history"], folder / "training_history.jsonl")
     save_jsonl([row], folder / "results.jsonl")
     save_pairs(folder / "heldout_pairs.jsonl", test_pairs)
     torch.save(subspace_payload, folder / "subspace.pt")
@@ -472,7 +487,7 @@ def evaluate_text(args, train_pairs, validation_pairs, test_pairs):
         f"(n={features.shape[0]}, d={features.shape[1]})"
     )
     pca_space = pca_space_with_at_least_k(
-        features, args.k, args.pca_variance_threshold
+        features, args.k, args.pca_variance_threshold, args.pca_seed
     )
 
     def evaluate_subspace(name, subspace):
@@ -639,7 +654,7 @@ def evaluate_text(args, train_pairs, validation_pairs, test_pairs):
                 },
             }
         )
-    return model_name, full_metrics, clean_ar, full_ar, conditions
+    return model_name, full_metrics, clean_ar, full_ar, conditions, features.shape[0]
 
 
 def evaluate_image(args, data_path, train_pairs, validation_pairs, test_pairs):
@@ -756,7 +771,7 @@ def evaluate_image(args, data_path, train_pairs, validation_pairs, test_pairs):
         f"(n={features.shape[0]}, d={features.shape[1]})"
     )
     pca_space = pca_space_with_at_least_k(
-        features, args.k, args.pca_variance_threshold
+        features, args.k, args.pca_variance_threshold, args.pca_seed
     )
 
     def evaluate_subspace(name, subspace):
@@ -935,7 +950,7 @@ def evaluate_image(args, data_path, train_pairs, validation_pairs, test_pairs):
                 },
             }
         )
-    return model_name, full_metrics, clean_ar, full_ar, conditions
+    return model_name, full_metrics, clean_ar, full_ar, conditions, features.shape[0]
 
 
 def main():
@@ -952,11 +967,11 @@ def main():
     )
 
     if args.modality == "text":
-        model_name, full_metrics, clean_ar, full_ar, conditions = evaluate_text(
+        model_name, full_metrics, clean_ar, full_ar, conditions, pca_sample_count = evaluate_text(
             args, train_pairs, validation_pairs, test_pairs
         )
     else:
-        model_name, full_metrics, clean_ar, full_ar, conditions = evaluate_image(
+        model_name, full_metrics, clean_ar, full_ar, conditions, pca_sample_count = evaluate_image(
             args, data_path, train_pairs, validation_pairs, test_pairs
         )
 
@@ -991,6 +1006,8 @@ def main():
                 "data_path": str(data_path),
                 "target": args.target,
                 "best_epoch": item["best_epoch"],
+                "pca_seed": args.pca_seed,
+                "pca_sample_count": pca_sample_count,
                 "pair_statistics": pair_stats,
                 "dataset_statistics": dataset_stats,
             }

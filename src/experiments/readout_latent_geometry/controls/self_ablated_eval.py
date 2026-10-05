@@ -78,7 +78,7 @@ def parse_args():
     parser.add_argument("--use_chat_template", action="store_true")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_pairs", type=int, default=0, help="Teacher-forced heldout pair cap; 0 means all.")
-    parser.add_argument("--max_autoregressive_pairs", type=int, default=32)
+    parser.add_argument("--max_autoregressive_pairs", type=int, default=128)
     parser.add_argument("--max_new_tokens", type=int, default=8)
     parser.add_argument("--skip_autoregressive", action="store_true")
     parser.add_argument("--skip_full_patch", action="store_true")

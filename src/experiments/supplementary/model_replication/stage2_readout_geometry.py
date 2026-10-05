@@ -525,11 +525,13 @@ def collect_image_activations(args, task: str, samples: list[dict], data_root: P
         batch = samples[start : start + args.activation_batch_size]
         prompts = [sample_prompt(processor, sample, args.prompt, args.enable_thinking) for sample in batch]
         images = [load_rgb_image(image_path_for(sample, data_root)) for sample in batch]
-        positions = resolve_batch_positions(processor, tokenizer, model, prompts, images, args.position)
         encoding = inputs_to_device(
             make_inputs(processor, prompts, images),
             model.device,
             dtype=getattr(model, "dtype", None),
+        )
+        positions = resolve_batch_positions(
+            processor, tokenizer, model, prompts, images, args.position, encoding=encoding
         )
         parts.append(capture_batch(model, blocks, encoding, positions, args.layer, args.hook))
         for sample, prompt, position in zip(batch, prompts, positions):

@@ -18,7 +18,9 @@ import torch
 
 from src.experiments.cross_condition_transfer.causal_transfer.causal_transfer import (
     DEFAULT_TASKS,
+    _matches_fingerprint,
     control_iia,
+    evaluation_fingerprint,
     first_result_row,
     heldout_pairs_path,
     jsonable,
@@ -119,7 +121,8 @@ def load_cache(args: argparse.Namespace, variant: str) -> dict[tuple, dict]:
     path = variant_dir(args, variant) / "procrustes_results.jsonl"
     if args.force or not path.exists():
         return {}
-    return {row_key(row): row for row in load_jsonl(path)}
+    return {row_key(row): row for row in load_jsonl(path)
+            if row.get("fingerprint") and _matches_fingerprint(args, row, code_file=__file__)}
 
 
 def save_map(args: argparse.Namespace, variant: str, row: dict, matrix: torch.Tensor, alpha: float, source_basis: torch.Tensor, destination_basis: torch.Tensor, fit_metrics: dict, test_metrics: dict) -> Path:
@@ -330,6 +333,7 @@ def evaluate_one(
         "destination_normalized_transfer_gain_over_causal": gain(normalized, causal.get("destination_normalized_transfer")),
     }
     row["alignment_path"] = str(save_map(args, variant, row, matrix, alpha, source_basis, destination_basis, fit_metrics, test_metrics))
+    row["fingerprint"] = evaluation_fingerprint(args, row, code_file=__file__)
     print(f"  {variant} {source_task}[{source_seed}] -> {destination_task}[{destination_seed}]: AR IIA={ar_iia:.4f}; norm={normalized}")
     return row
 
@@ -347,7 +351,7 @@ def main() -> None:
     alignments = [parse_alignment(item) for item in args.alignments]
     args.tasks = list(dict.fromkeys(args.tasks + [task for pair in alignments for task in pair]))
     seed_selection = selected_seeds(args)
-    causal_rows = load_causal_rows(args.causal_transfer_rows)
+    causal_rows = load_causal_rows(args.causal_transfer_rows, args)
     model, processor, tokenizer, blocks, hidden_size, model_name = load_model_bundle(args, args.tasks)
     activation_cache = {}
     sample_cache = {}

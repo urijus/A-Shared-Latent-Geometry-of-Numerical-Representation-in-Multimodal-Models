@@ -57,7 +57,9 @@ from src.experiments.arithmetic_reference.das.image.das_image_core import (
     load_rgb_image,
     make_inputs,
     patched_forward as patched_forward_image,
+    padding_offsets,
     resolve_batch_positions,
+    resolve_prompt_positions,
     sample_prompt,
 )
 from src.experiments.arithmetic_reference.das_audit.audit_das import (
@@ -124,6 +126,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--random_controls", type=int, default=20)
     parser.add_argument("--random_seed", type=int, default=1729)
     parser.add_argument("--pca_max_samples", type=int, default=1024)
+    parser.add_argument("--pca_seed", type=int, default=0)
     parser.add_argument("--pca_variance_threshold", type=float, default=0.9)
     parser.add_argument("--m_values", type=int, nargs="+")
     parser.add_argument("--smoke_test", action="store_true", help="Use small cumulative m grid and a small pair cap unless explicitly overridden.")
@@ -781,7 +784,7 @@ def collect_pca_space(args, task, model, processor, tokenizer, blocks, result_ro
             batch_size=args.batch_size,
             max_samples=args.pca_max_samples,
         )[args.layer]
-    pca_space = pca_space_with_at_least_k(features, min_components, args.pca_variance_threshold)
+    pca_space = pca_space_with_at_least_k(features, min_components, args.pca_variance_threshold, args.pca_seed)
     if pca_space.shape[0] != hidden_size:
         raise ValueError(f"PCA space d_model={pca_space.shape[0]} != hidden_size={hidden_size}.")
     print(f"  random ablation control space: retained PCA span with rank {pca_space.shape[1]}")
@@ -987,12 +990,14 @@ def autoregressive_outputs_image(args, model, processor, tokenizer, blocks, pair
         donor_prompt = sample_prompt(processor, donor, args.prompt, args.enable_thinking)
         base_image = load_rgb_image(image_path_for(base, data_root))
         donor_image = load_rgb_image(image_path_for(donor, data_root))
-        base_position = resolve_batch_positions(processor, tokenizer, model, [base_prompt], [base_image], position_for(args, "image"))[0]
-        donor_position = resolve_batch_positions(processor, tokenizer, model, [donor_prompt], [donor_image], position_for(args, "image"))[0]
         inputs = inputs_to_device(make_inputs(processor, [base_prompt, donor_prompt], [base_image, donor_image]), model.device)
+        base_position, donor_position = resolve_batch_positions(
+            processor, tokenizer, model, [base_prompt, donor_prompt],
+            [base_image, donor_image], position_for(args, "image"), encoding=inputs
+        )
         generated = []
         for _ in range(args.max_new_tokens):
-            base_length = int(inputs["attention_mask"][0].sum())
+            base_length = padding_offsets(inputs)[0] + int(inputs["attention_mask"][0].sum())
             outputs = patched_forward_image(
                 model,
                 inputs,
@@ -1119,13 +1124,15 @@ def digit_teacher_forced_image(args, model, processor, tokenizer, blocks, pairs,
             answers.append(answer)
             base_images.append(load_rgb_image(image_path_for(base, data_root)))
             donor_images.append(load_rgb_image(image_path_for(donor, data_root)))
-        base_positions = resolve_batch_positions(processor, tokenizer, model, base_prompts, base_images, position_for(args, "image"))
-        donor_positions = resolve_batch_positions(processor, tokenizer, model, donor_prompts, donor_images, position_for(args, "image"))
         prompts = base_prompts + donor_prompts
         images = base_images + donor_images
         full_answers = answers + answers
         spans = [(0, len(answer)) for answer in full_answers]
         encoding, full_positions, _ = answer_token_positions(processor, prompts, full_answers, spans, images, model.device)
+        positions = resolve_prompt_positions(
+            processor, tokenizer, model, prompts, images, position_for(args, "image"), encoding
+        )
+        base_positions, donor_positions = positions[:len(batch)], positions[len(batch):]
         for answer, positions in zip(answers, full_positions[: len(batch)]):
             if len(positions) != 2:
                 raise ValueError(f"Answer {answer!r} did not tokenize as two answer tokens: {positions}.")

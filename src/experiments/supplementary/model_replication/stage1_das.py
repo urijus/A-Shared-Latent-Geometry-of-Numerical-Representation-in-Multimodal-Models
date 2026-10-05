@@ -688,7 +688,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_train_pairs", "--max-train-pairs", type=int, default=4096)
     parser.add_argument("--max_validation_pairs", "--max-validation-pairs", type=int, default=512)
     parser.add_argument("--max_test_pairs", "--max-test-pairs", type=int, default=512)
-    parser.add_argument("--max_autoregressive_pairs", "--max-autoregressive-pairs", type=int, default=0)
+    parser.add_argument("--max_autoregressive_pairs", "--max-autoregressive-pairs", type=int, default=128)
     parser.add_argument("--max_new_tokens", "--max-new-tokens", type=int, default=8)
     parser.add_argument("--train_fraction", "--train-fraction", type=float, default=0.7)
     parser.add_argument("--validation_fraction", "--validation-fraction", type=float, default=0.15)

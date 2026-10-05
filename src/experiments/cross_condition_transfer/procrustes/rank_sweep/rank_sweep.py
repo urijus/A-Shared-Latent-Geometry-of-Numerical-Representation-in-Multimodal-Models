@@ -15,6 +15,7 @@ import torch
 
 from src.experiments.cross_condition_transfer.causal_transfer.causal_transfer import (
     DEFAULT_TASKS,
+    evaluation_fingerprint,
     control_iia,
     first_result_row,
     heldout_pairs_path,
@@ -80,7 +81,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_alignment_samples", type=int, default=2048)
     parser.add_argument("--max_alignment_eval_samples", type=int, default=2048)
     parser.add_argument("--activation_batch_size", type=int, default=16)
-    parser.add_argument("--max_autoregressive_pairs", type=int, default=32)
+    parser.add_argument("--max_autoregressive_pairs", type=int, default=128)
     parser.add_argument("--max_new_tokens", type=int, default=8)
     parser.add_argument("--prompt", default="Output ONLY a number.")
     parser.add_argument("--enable_thinking", action="store_true")
@@ -133,8 +134,22 @@ def load_cache(args: argparse.Namespace) -> dict[tuple, dict]:
     for row in load_jsonl(path):
         if row.get("alpha_fit_kind") != "full_rank_scaled_displacement":
             continue
+        try:
+            if row.get("fingerprint") != rank_fingerprint(args, row):
+                continue
+        except (KeyError, FileNotFoundError, ValueError):
+            continue
         cache[row_key(row)] = row
     return cache
+
+
+def rank_fingerprint(args, row):
+    mapped = {**row, "alignment_path": row["svd_transport_path"],
+              "variant": f"rank_{row['rank']}",
+              "fit_source_task": row["source_task"], "fit_source_seed": row["source_seed"],
+              "fit_destination_task": row["destination_task"],
+              "fit_destination_seed": row["destination_seed"]}
+    return evaluation_fingerprint(args, mapped, code_file=__file__)
 
 
 def mean(values: list[float | None]) -> float | None:
@@ -466,6 +481,7 @@ def evaluate_alignment(
             f"AR IIA={aligned_iia:.4f}; normalized={normalized}; "
             f"cum sv={item['cumulative_singular_value_fraction']}"
         )
+        row["fingerprint"] = rank_fingerprint(args, row)
         rows.append(row)
     return rows
 
@@ -484,7 +500,7 @@ def main() -> None:
     args.tasks = list(dict.fromkeys(args.tasks + [task for pair in alignments for task in pair]))
     ranks = rank_values(args)
     seed_selection = selected_seeds(args)
-    causal_rows = load_causal_rows(args.causal_transfer_rows)
+    causal_rows = load_causal_rows(args.causal_transfer_rows, args)
 
     print("Rank-sweep Procrustes experiment")
     print(f"Ranks: {ranks}")

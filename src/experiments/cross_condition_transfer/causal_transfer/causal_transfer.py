@@ -24,6 +24,7 @@ from pathlib import Path
 
 import torch
 
+from src.common.fingerprint import code_identity, dataset_hash, digest, file_hash, model_identity, ordered_pairs_hash
 from src.interventions.das import (
     DASSubspace,
     autoregressive_iia,
@@ -80,7 +81,7 @@ def parse_args() -> argparse.Namespace:
             "text:addition=2 image:addition=0,1"
         ),
     )
-    parser.add_argument("--max_autoregressive_pairs", type=int, default=32)
+    parser.add_argument("--max_autoregressive_pairs", type=int, default=128)
     parser.add_argument("--max_new_tokens", type=int, default=8)
     parser.add_argument(
         "--prompt",
@@ -354,6 +355,57 @@ def cached_path(args: argparse.Namespace) -> Path:
     return args.output_dir / "transfer_results.jsonl"
 
 
+def evaluation_fingerprint(args: argparse.Namespace, row: dict, *, code_file=None) -> str:
+    source_modality, source_operation = parse_task(row["source_task"])
+    destination_modality, destination_operation = parse_task(row["destination_task"])
+    source_seed = int(row["source_seed"])
+    destination_seed = int(row["destination_seed"])
+    source_result = first_result_row(args, source_modality, source_operation, args.condition, source_seed)
+    destination_result = first_result_row(args, destination_modality, destination_operation, args.condition, destination_seed)
+    control_path = results_path(args, destination_modality, destination_operation, args.control_condition, destination_seed)
+    pairs_path = heldout_pairs_path(args, destination_modality, destination_operation, destination_seed)
+    model_path, _ = resolve_model_for_loading(args.model)
+    files = {
+        "source_basis": file_hash(subspace_path(args, source_modality, source_operation, source_seed)),
+        "destination_basis": file_hash(subspace_path(args, destination_modality, destination_operation, destination_seed)),
+        "source_dataset": dataset_hash(source_result["data_path"]),
+        "destination_dataset": dataset_hash(destination_result["data_path"]),
+        "destination_self": file_hash(results_path(args, destination_modality, destination_operation, args.condition, destination_seed)),
+        "destination_control": file_hash(control_path) if args.control_condition != "clean" else digest(destination_result.get("clean_autoregressive_iia")),
+        "ordered_pairs": ordered_pairs_hash(pairs_path, args.max_autoregressive_pairs),
+    }
+    if code_file is not None:
+        files["transport_map"] = file_hash(row["alignment_path"])
+        files["causal_inputs"] = file_hash(args.causal_transfer_rows)
+        for prefix in ("fit_source", "fit_destination"):
+            modality, operation = parse_task(row[prefix + "_task"])
+            seed = int(row[prefix + "_seed"])
+            files[prefix + "_basis"] = file_hash(subspace_path(args, modality, operation, seed))
+            files[prefix + "_dataset"] = dataset_hash(first_result_row(args, modality, operation, args.condition, seed)["data_path"])
+    code_files = [__file__, Path(__file__).parents[3] / "common" / "fingerprint.py",
+                  Path(__file__).parents[3] / "models" / "hf.py",
+                  Path(__file__).parents[3] / "interventions" / "das.py",
+                  Path(__file__).parents[3] / "geometry" / "alignment.py",
+                  Path(__file__).parents[3] / "experiments" / "arithmetic_reference" / "linear_probes" / "text" / "extract_activations.py",
+                  Path(__file__).parents[3] / "experiments" / "arithmetic_reference" / "linear_probes" / "image" / "extract_image_activations.py",
+                  Path(__file__).parents[3] / "experiments" / "arithmetic_reference" / "das" / "image" / "das_image_core.py"]
+    if code_file is not None:
+        code_files.extend([Path(__file__).parents[1] / "procrustes" / "procrustes.py", code_file])
+    settings = {name: getattr(args, name, None) for name in (
+        "model", "target", "condition", "control_condition", "layer", "k", "hook",
+        "split_seed", "text_position", "image_position", "max_autoregressive_pairs",
+        "max_new_tokens", "prompt", "enable_thinking", "use_chat_template",
+        "train_fraction", "validation_fraction", "alignment_seed", "max_alignment_samples",
+        "max_alignment_eval_samples", "activation_batch_size",
+    )}
+    return digest({"schema": 1, "model_processor": model_identity(model_path),
+                   "code": code_identity(*code_files), "files": files,
+                   "source": [row["source_task"], source_seed],
+                   "destination": [row["destination_task"], destination_seed],
+                   "variant": row.get("variant"), "fit_kind": row.get("fit_kind"),
+                   "settings": settings})
+
+
 def load_cached(args: argparse.Namespace) -> dict[tuple, dict]:
     path = cached_path(args)
     if args.force or not path.exists():
@@ -367,7 +419,15 @@ def load_cached(args: argparse.Namespace) -> dict[tuple, dict]:
             int(row["destination_seed"]),
         ): row
         for row in rows
+        if row.get("fingerprint") and _matches_fingerprint(args, row)
     }
+
+
+def _matches_fingerprint(args, row, *, code_file=None):
+    try:
+        return row["fingerprint"] == evaluation_fingerprint(args, row, code_file=code_file)
+    except (KeyError, FileNotFoundError, ValueError):
+        return False
 
 
 def evaluate_transfer_for_destination(
@@ -456,8 +516,7 @@ def evaluate_transfer_for_destination(
                     )
                 used_saved_self = False
 
-            rows.append(
-                {
+            row = {
                     "model": model_name,
                     "source_task": source_task,
                     "source_modality": source_modality,
@@ -490,7 +549,8 @@ def evaluate_transfer_for_destination(
                     ),
                     "used_saved_self_score": used_saved_self,
                 }
-            )
+            row["fingerprint"] = evaluation_fingerprint(args, row)
+            rows.append(row)
 
     del model
     if torch.cuda.is_available():

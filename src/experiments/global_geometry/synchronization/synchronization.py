@@ -124,7 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--validation_fraction", type=float, default=0.15)
     parser.add_argument("--alignment_seed", type=int, default=0)
     parser.add_argument("--max_pair_bank", type=int, default=65536)
-    parser.add_argument("--max_autoregressive_pairs", type=int, default=32)
+    parser.add_argument("--max_autoregressive_pairs", type=int, default=128)
     parser.add_argument("--activation_batch_size", type=int, default=16)
     parser.add_argument("--max_new_tokens", type=int, default=8)
     parser.add_argument("--prompt", default="Output ONLY a number.")

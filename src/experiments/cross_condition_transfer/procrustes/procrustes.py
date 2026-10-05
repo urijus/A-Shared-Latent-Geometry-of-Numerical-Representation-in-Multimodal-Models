@@ -57,7 +57,9 @@ from src.experiments.arithmetic_reference.das.image.das_image_core import (
 )
 from src.experiments.cross_condition_transfer.causal_transfer.causal_transfer import (
     DEFAULT_TASKS,
+    _matches_fingerprint,
     control_iia,
+    evaluation_fingerprint,
     first_result_row,
     heldout_pairs_path,
     jsonable,
@@ -149,7 +151,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_alignment_samples", type=int, default=2048)
     parser.add_argument("--max_alignment_eval_samples", type=int, default=2048)
     parser.add_argument("--activation_batch_size", type=int, default=16)
-    parser.add_argument("--max_autoregressive_pairs", type=int, default=32)
+    parser.add_argument("--max_autoregressive_pairs", type=int, default=128)
     parser.add_argument("--max_new_tokens", type=int, default=8)
     parser.add_argument("--prompt", default="Output ONLY a number.")
     parser.add_argument("--enable_thinking", action="store_true")
@@ -275,8 +277,10 @@ def collect_activations(
                 raise ValueError("Image activation collection requires a processor and data_root.")
             prompts = [sample_prompt(processor, sample, prompt, enable_thinking) for sample in batch]
             images = [load_rgb_image(image_path_for(sample, data_root)) for sample in batch]
-            positions = resolve_batch_positions(processor, tokenizer, model, prompts, images, position)
             encoding = inputs_to_device(make_inputs(processor, prompts, images), model.device)
+            positions = resolve_batch_positions(
+                processor, tokenizer, model, prompts, images, position, encoding=encoding
+            )
 
         captured = {}
         with ExitStack() as stack:
@@ -1074,9 +1078,12 @@ def hidden_deltas_for_pairs(
     return (float(alpha) * (source_coordinate_deltas @ q)) @ destination_basis.T
 
 
-def load_causal_rows(path: Path) -> dict[tuple, dict]:
+def load_causal_rows(path: Path, args=None) -> dict[tuple, dict]:
     if not path.exists():
         return {}
+    rows = load_jsonl(path)
+    if args is not None and any(not _matches_fingerprint(args, row) for row in rows):
+        raise ValueError(f"Stale or unfingerprinted causal transfer rows in {path}; rerun causal transfer.")
     return {
         (
             row["source_task"],
@@ -1084,7 +1091,7 @@ def load_causal_rows(path: Path) -> dict[tuple, dict]:
             row["destination_task"],
             int(row["destination_seed"]),
         ): row
-        for row in load_jsonl(path)
+        for row in rows
     }
 
 
@@ -1097,6 +1104,8 @@ def load_cached_rows(args: argparse.Namespace, variant: str) -> dict[tuple, dict
         if variant in DEFAULT_VARIANTS and (
             "fit_source_task" not in row or "random_control_alpha" not in row
         ):
+            continue
+        if not row.get("fingerprint") or not _matches_fingerprint(args, row, code_file=__file__):
             continue
         cache[
             (
@@ -1197,7 +1206,7 @@ def evaluate_one(
         f"    AR IIA={aligned_iia:.4f}; normalized={aligned_normalized}; "
         f"gain over causal={gain(aligned_normalized, causal_normalized)}"
     )
-    return {
+    row = {
         "model": model_name,
         "variant": variant,
         "variant_description": VARIANT_DESCRIPTIONS[variant],
@@ -1242,6 +1251,8 @@ def evaluate_one(
         "autoregressive_iia_gain_over_causal": gain(aligned_iia, causal_iia),
         "destination_normalized_transfer_gain_over_causal": gain(aligned_normalized, causal_normalized),
     }
+    row["fingerprint"] = evaluation_fingerprint(args, row, code_file=__file__)
+    return row
 
 
 def mean(values: list[float | None]) -> float | None:
@@ -1370,7 +1381,7 @@ def main() -> None:
     alignments = [parse_alignment(item) for item in args.alignments]
     args.tasks = list(dict.fromkeys(args.tasks + [task for pair in alignments for task in pair]))
     seed_selection = selected_seeds(args)
-    causal_rows = load_causal_rows(args.causal_transfer_rows)
+    causal_rows = load_causal_rows(args.causal_transfer_rows, args)
     model, processor, tokenizer, blocks, hidden_size, model_name = load_model_bundle(args, args.tasks)
 
     print("Selected seeds:")
