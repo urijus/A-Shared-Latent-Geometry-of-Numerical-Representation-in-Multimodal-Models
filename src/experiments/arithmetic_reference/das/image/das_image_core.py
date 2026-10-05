@@ -4,7 +4,9 @@ import copy
 import math
 import random
 import re
+from collections import OrderedDict
 from contextlib import ExitStack
+from functools import lru_cache
 from pathlib import Path
 
 import torch
@@ -15,7 +17,6 @@ from src.interventions.das import (
     DASSubspace,
     hidden,
     hook_module,
-    pca_principal_space,
     random_subspace_from_pca,
     replace_hidden,
     target_answers,
@@ -32,6 +33,7 @@ def image_path_for(sample, data_root):
     return image_path if image_path.is_absolute() else data_root / image_path
 
 
+@lru_cache(maxsize=256)
 def load_rgb_image(path):
     with Image.open(path) as image:
         return image.convert("RGB")
@@ -41,7 +43,42 @@ def sample_prompt(processor, sample, prompt, enable_thinking):
     return render_prompt(processor, prompt, enable_thinking)
 
 
+class CachedGemma4Images:
+    """Cache the independent per-image preprocessing done by Gemma4 Unified."""
+
+    def __init__(self, image_processor, max_images=128):
+        self.image_processor = image_processor
+        self.max_images = max_images
+        self.cache = OrderedDict()
+
+    def __getattr__(self, name):
+        return getattr(self.image_processor, name)
+
+    def __call__(self, images, **kwargs):
+        # Gemma4UnifiedImageProcessor processes each image separately, then stacks.
+        flat_images = [image for group in images for image in group] if images and isinstance(images[0], list) else images
+        parts = []
+        options = repr(sorted(kwargs.items()))
+        for image in flat_images:
+            key = (id(image), options)
+            if key not in self.cache:
+                self.cache[key] = (image, self.image_processor([image], **kwargs))
+                if len(self.cache) > self.max_images:
+                    self.cache.popitem(last=False)
+            self.cache.move_to_end(key)
+            parts.append(self.cache[key][1])
+        combined = {
+            name: torch.cat([part[name] for part in parts], dim=0)
+            if isinstance(parts[0][name], torch.Tensor)
+            else [item for part in parts for item in part[name]]
+            for name in parts[0]
+        }
+        return type(parts[0])(data=combined)
+
+
 def make_inputs(processor, texts, images):
+    if processor.image_processor.__class__.__name__ == "Gemma4UnifiedImageProcessor":
+        processor.image_processor = CachedGemma4Images(processor.image_processor)
     if processor.__class__.__name__ == "PixtralProcessor":
         return processor(
             text=texts,
@@ -82,19 +119,32 @@ def input_lengths(processor, texts, images, device):
     return [inputs["input_ids"].shape[1]] * len(texts)
 
 
+def padding_offsets(encoding):
+    """Map each row's unpadded token indices into this exact model encoding."""
+    mask = encoding.get("attention_mask")
+    if mask is None:
+        return [0] * encoding["input_ids"].shape[0]
+    width = encoding["input_ids"].shape[1]
+    return [
+        width - int(row.sum()) if int(row[0]) == 0 else 0
+        for row in mask
+    ]
+
+
 def patched_forward(model, encoding, blocks, subspaces, layers, hook_name,
                     base_positions, source_positions, n_base_groups):
-    batch_size = len(base_positions)
+    batch_size = len(source_positions)
+    if len(base_positions) != n_base_groups * batch_size:
+        raise ValueError("Expected one intervention position per base encoding row.")
 
     def patch_tensor(value, layer):
         activations = hidden(value)
         updated = activations.clone()
         donor_offset = n_base_groups * batch_size
         for group in range(n_base_groups):
-            for row, (base_position, source_position) in enumerate(
-                zip(base_positions, source_positions)
-            ):
+            for row, source_position in enumerate(source_positions):
                 base_row = group * batch_size + row
+                base_position = base_positions[base_row]
                 donor_row = donor_offset + row
                 updated[base_row, base_position] = subspaces[str(layer)].patch(
                     activations[base_row, base_position],
@@ -128,12 +178,13 @@ def resolve_position_spec(position):
         return position
 
 
-def resolve_batch_positions(processor, tokenizer, model, texts, images, position):
-    inputs = make_inputs(processor, texts, images)
+def resolve_batch_positions(processor, tokenizer, model, texts, images, position, encoding=None):
+    inputs = encoding if encoding is not None else make_inputs(processor, texts, images)
+    offsets = padding_offsets(inputs)
     spec = resolve_position_spec(position)
     if spec == "last_input":
         if "attention_mask" in inputs:
-            return [int(value) - 1 for value in inputs["attention_mask"].sum(dim=1)]
+            return [offset + int(value) - 1 for offset, value in zip(offsets, inputs["attention_mask"].sum(dim=1))]
         return [inputs["input_ids"].shape[1] - 1] * len(texts)
     if spec == "last_image_token":
         image_token_ids = image_token_id_candidates(model, processor, tokenizer)
@@ -149,15 +200,32 @@ def resolve_batch_positions(processor, tokenizer, model, texts, images, position
         else [inputs["input_ids"].shape[1]] * len(texts)
     )
     positions = []
-    for length in lengths:
+    for length, offset in zip(lengths, offsets):
         resolved = int(length) + spec if spec < 0 else spec
         if resolved < 0 or resolved >= int(length):
             raise ValueError(
                 f"Position {position} resolves to {resolved}, outside "
                 f"0..{int(length) - 1}."
             )
-        positions.append(resolved)
+        positions.append(resolved + offset)
     return positions
+
+
+def resolve_prompt_positions(processor, tokenizer, model, texts, images, position, encoding):
+    """Resolve prompt positions in an encoding that may include answer tokens."""
+    spec = resolve_position_spec(position)
+    if spec == "last_input" or isinstance(spec, int):
+        lengths = input_lengths(processor, texts, images, model.device)
+        positions = []
+        for offset, length in zip(padding_offsets(encoding), lengths):
+            resolved = length - 1 if spec == "last_input" else length + spec if spec < 0 else spec
+            if resolved < 0 or resolved >= length:
+                raise ValueError(f"Position {position} resolves outside prompt length {length}.")
+            positions.append(offset + resolved)
+        return positions
+    return resolve_batch_positions(
+        processor, tokenizer, model, texts, images, position, encoding=encoding
+    )
 
 
 def print_position_summary(processor, tokenizer, model, text, image, position):
@@ -170,7 +238,7 @@ def print_position_summary(processor, tokenizer, model, text, image, position):
         if "attention_mask" in inputs
         else int(inputs["input_ids"].shape[1])
     )
-    tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0, :length].tolist())
+    tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0].tolist())
     token = tokens[resolved] if 0 <= resolved < len(tokens) else "<out>"
     print("\nImage DAS position summary:")
     print(f"  requested position: {position}")
@@ -195,7 +263,7 @@ def answer_token_positions(
         dtype=dtype,
     )
 
-    full_end = input_lengths(processor, full_texts, images, device)
+    full_end = [int(value) for value in encoding["attention_mask"].sum(dim=1)]
     variable_start_texts = [
         prompt + answer[: span[0]]
         for prompt, answer, span in zip(prompt_texts, answers, spans)
@@ -207,12 +275,15 @@ def answer_token_positions(
     prompt_end = input_lengths(processor, prompt_texts, images, device)
     variable_start = input_lengths(processor, variable_start_texts, images, device)
     variable_end = input_lengths(processor, variable_end_texts, images, device)
+    offsets = padding_offsets(encoding)
 
     full_positions = [
-        list(range(start, end)) for start, end in zip(prompt_end, full_end)
+        list(range(start + offset, end + offset))
+        for start, end, offset in zip(prompt_end, full_end, offsets)
     ]
     variable_positions = [
-        list(range(start, end)) for start, end in zip(variable_start, variable_end)
+        list(range(start + offset, end + offset))
+        for start, end, offset in zip(variable_start, variable_end, offsets)
     ]
     if any(not positions for positions in full_positions):
         raise ValueError("Could not locate full answer tokens.")
@@ -270,13 +341,6 @@ def teacher_forced_batch_image(
         base_spans.append(base_span)
         source_spans.append(source_span)
 
-    base_positions = resolve_batch_positions(
-        processor, tokenizer, model, base_prompts, base_images, position_strategy
-    )
-    donor_positions = resolve_batch_positions(
-        processor, tokenizer, model, donor_prompts, donor_images, position_strategy
-    )
-
     prompts = base_prompts + base_prompts + donor_prompts
     images = base_images + base_images + donor_images
     answers = source_answers + base_answers + source_answers
@@ -290,6 +354,12 @@ def teacher_forced_batch_image(
         model.device,
         dtype=getattr(model, "dtype", None),
     )
+    positions = resolve_prompt_positions(
+        processor, tokenizer, model, prompts, images, position_strategy, encoding
+    )
+    n = len(pairs)
+    base_positions = positions[:n] + positions[n:2 * n]
+    donor_positions = positions[2 * n:]
     outputs = (
         patched_forward(
             model,
@@ -306,7 +376,6 @@ def teacher_forced_batch_image(
         else model(**encoding, use_cache=False)
     )
 
-    n = len(pairs)
     source_variable_score, variable_exact = sequence_scores(
         outputs.logits[:n], encoding["input_ids"][:n], variable_positions[:n]
     )
@@ -436,13 +505,14 @@ def collect_initialization_features_image(
             for sample in batch
         ]
         images = [load_rgb_image(image_path_for(sample, data_root)) for sample in batch]
-        positions = resolve_batch_positions(
-            processor, tokenizer, model, prompts, images, position_strategy
-        )
         encoding = inputs_to_device(
             make_inputs(processor, prompts, images),
             model.device,
             dtype=getattr(model, "dtype", None),
+        )
+        positions = resolve_batch_positions(
+            processor, tokenizer, model, prompts, images, position_strategy,
+            encoding=encoding,
         )
         captured = {}
         with ExitStack() as stack:
@@ -641,20 +711,19 @@ def autoregressive_iia_image(
         donor_prompt = sample_prompt(processor, donor, prompt, enable_thinking)
         base_image = load_rgb_image(image_path_for(base, data_root))
         donor_image = load_rgb_image(image_path_for(donor, data_root))
-        base_position = resolve_batch_positions(
-            processor, tokenizer, model, [base_prompt], [base_image], position_strategy
-        )[0]
-        donor_position = resolve_batch_positions(
-            processor, tokenizer, model, [donor_prompt], [donor_image], position_strategy
-        )[0]
         inputs = inputs_to_device(
             make_inputs(processor, [base_prompt, donor_prompt], [base_image, donor_image]),
             model.device,
             dtype=getattr(model, "dtype", None),
         )
+        base_position, donor_position = resolve_batch_positions(
+            processor, tokenizer, model,
+            [base_prompt, donor_prompt], [base_image, donor_image],
+            position_strategy, encoding=inputs,
+        )
         generated = []
         for _ in range(max_new_tokens):
-            base_length = int(inputs["attention_mask"][0].sum())
+            base_length = padding_offsets(inputs)[0] + int(inputs["attention_mask"][0].sum())
             outputs = patched_forward(
                 model,
                 inputs,
