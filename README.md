@@ -430,6 +430,16 @@ Experiment scripts under `experiments/` are intentionally thin entrypoints. Scie
 
 The wrappers do not change the experiment defaults or output schemas.
 
+Prepare the main text and image datasets with an available Arial font. The script
+keeps only examples correct in both formats and writes them in matching order:
+
+```bash
+python scripts/prepare_main_datasets.py --font-path /path/to/Arial.ttf
+```
+
+Checked causal-transfer caches require a local model snapshot under `models/` so
+the model and processor files can be fingerprinted.
+
 Every major entrypoint exposes its configuration through
 
 ```bash
@@ -444,6 +454,8 @@ python experiments/01_arithmetic_reference/linear_probes.py --help
 python experiments/01_arithmetic_reference/fourier_probes.py --help
 
 python experiments/01_arithmetic_reference/das.py --help
+
+python experiments/01_arithmetic_reference/das_audit.py --help
 ```
 
 These experiments cover
@@ -464,6 +476,8 @@ These experiments cover
 python experiments/02_cross_condition_transfer/causal_transfer.py --help
 
 python experiments/02_cross_condition_transfer/align_subspaces.py --help
+
+python experiments/02_cross_condition_transfer/rank_sweep.py --help
 ```
 
 These experiments cover
