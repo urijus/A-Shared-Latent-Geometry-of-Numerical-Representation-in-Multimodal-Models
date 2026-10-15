@@ -1,5 +1,9 @@
-# Accelerator-independent runtime dependencies.
-# Install one of the PyTorch requirement files before this file.
+# Reference environment: Linux, Python 3.10, RTX PRO 6000 Blackwell.
+# CUDA 12.8 wheels match the reported reproduction; see README.md.
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0+cu128
+torchvision==0.26.0+cu128
+
 accelerate==1.13.0
 kokoro==0.9.4
 matplotlib==3.10.9
