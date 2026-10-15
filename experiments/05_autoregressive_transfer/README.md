@@ -1,4 +1,4 @@
-# Section VIII: Autoregressive transfer
+# Section 6: Autoregressive transfer
 
 These entry points test whether numerical identity in `L` redirects later digits,
 compare arithmetic with number repetition, and follow the intervention into the
@@ -10,5 +10,7 @@ python experiments/05_autoregressive_transfer/repeat_geometry.py --help
 python experiments/05_autoregressive_transfer/next_step_readout.py --help
 ```
 
-Outputs are written below the `results/closing/` and
-`results/experiments/closing/` hierarchies.
+
+For runnable commands, explicit settings and output paths, use the
+[experiment guide](../README.md#autoregressive-transfer-figure-4). The guide passes isolated output
+roots instead of the historical defaults shown by individual CLIs.

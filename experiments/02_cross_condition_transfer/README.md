@@ -1,4 +1,4 @@
-# Section VI: Cross-condition transfer
+# Section 4: Cross-condition transfer
 
 These entry points reproduce raw causal transfer, learned scaled-orthogonal
 transport, and the modality/operation path-composition tests.
@@ -9,4 +9,7 @@ python experiments/02_cross_condition_transfer/align_subspaces.py --help
 python experiments/02_cross_condition_transfer/factorized_paths.py --help
 ```
 
-Outputs are written below `results/final_exps/`.
+
+For runnable commands, explicit settings and output paths, use the
+[experiment guide](../README.md#causal-transfer-and-figure-2). The guide passes isolated output
+roots instead of the historical defaults shown by individual CLIs.

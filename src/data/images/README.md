@@ -27,8 +27,13 @@ and `text_color`.
 
 ## Pipeline Use
 
-For the baseline linear probe pipeline, create image datasets from the same
-model-correct text JSONLs:
+For the main-paper reproduction, use the [experiment guide](../../../experiments/README.md#setup-and-data).
+It specifies DejaVu Sans, 64 px, 384×384 images and the intersection of examples
+answered correctly in both modalities. Rendering text-correct examples alone
+does not perform the image correctness filter.
+
+For a separate baseline probe exploration, create image datasets from existing
+text JSONLs:
 
 ```bash
 for modality in addition subtraction multiplication; do
@@ -41,17 +46,17 @@ done
 Then extract multimodal activations:
 
 ```bash
-python -m src.experiments.arithmetic_reference.linear_probes.text.extract_image_activations \
+python -m src.experiments.arithmetic_reference.linear_probes.image.extract_image_activations \
   --model gemma4_12b_it \
   --data_dir dataset/images/gemma4_12b_it/digits/model_correct_with_prompt \
   --output_dir outputs/activations/baseline_images/gemma4_12b_it/digits \
   --modalities addition subtraction multiplication \
-  --prompt "Output ONLY a number. " \
-  --position_strategy last_input \
+  --prompt 'Output ONLY a number.' \
+  --positions -1 --layers 43 \
   --batch_size 1
 ```
 
 The saved activation files have the same shape convention as text activations:
-`[examples, layers, positions, d_model]`. They currently save one position named
-`last_input`, so the existing baseline probe runner can be reused by pointing
+`[examples, layers, positions, d_model]`. This command saves the final prompt
+position (`-1`), so the baseline probe runner can be reused by pointing
 `--activation_dir` at the image activation directory.
