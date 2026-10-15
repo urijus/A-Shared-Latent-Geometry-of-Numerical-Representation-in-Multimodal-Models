@@ -77,3 +77,6 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Results reproduction
+/scripts/slurm_reproduction/

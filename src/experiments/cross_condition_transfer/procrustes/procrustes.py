@@ -1082,8 +1082,17 @@ def load_causal_rows(path: Path, args=None) -> dict[tuple, dict]:
     if not path.exists():
         return {}
     rows = load_jsonl(path)
-    if args is not None and any(not _matches_fingerprint(args, row) for row in rows):
-        raise ValueError(f"Stale or unfingerprinted causal transfer rows in {path}; rerun causal transfer.")
+    if args is not None:
+        # Direct transfer has no alignment fit; keep its original fingerprint
+        # settings when checking its rows from an alignment or rank-sweep run.
+        direct_args = argparse.Namespace(**{
+            name: value for name, value in vars(args).items() if name not in (
+                "train_fraction", "validation_fraction", "alignment_seed",
+                "max_alignment_samples", "max_alignment_eval_samples", "activation_batch_size",
+            )
+        })
+        if any(not _matches_fingerprint(direct_args, row) for row in rows):
+            raise ValueError(f"Stale or unfingerprinted causal transfer rows in {path}; rerun causal transfer.")
     return {
         (
             row["source_task"],

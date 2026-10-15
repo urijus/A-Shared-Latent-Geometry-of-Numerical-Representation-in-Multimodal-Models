@@ -73,8 +73,29 @@ with TemporaryDirectory() as directory:
     cache_path = root / "transfer_results.jsonl"
     cache_path.write_text(json.dumps(row) + "\n", encoding="utf-8")
     assert len(scope["load_cached"](args)) == 1
+    # Alignment-only options must not invalidate direct-transfer rows, while
+    # changes to their actual evaluation inputs must still be rejected.
+    procrustes_source = SOURCE.parents[1] / "procrustes/procrustes.py"
+    procrustes_tree = ast.parse(procrustes_source.read_text(encoding="utf-8"))
+    procrustes_tree.body = [
+        node for node in procrustes_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "load_causal_rows"
+    ]
+    exec(compile(procrustes_tree, str(procrustes_source), "exec"), scope)
+    alignment_args = argparse.Namespace(
+        **vars(args), train_fraction=0.7, validation_fraction=0.15,
+        alignment_seed=0, max_alignment_samples=4096,
+        max_alignment_eval_samples=512, activation_batch_size=16,
+    )
+    assert len(scope["load_causal_rows"](cache_path, alignment_args)) == 1
     source_basis.write_bytes(b"changed basis")
     assert not scope["load_cached"](args)
+    try:
+        scope["load_causal_rows"](cache_path, alignment_args)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Alignment accepted direct rows after a basis change")
     source_basis.write_bytes(b"basis A")
     pairs.write_text('{"base_sample_id":2,"source_sample_id":1}\n', encoding="utf-8")
     assert not scope["load_cached"](args)
@@ -103,3 +124,4 @@ with TemporaryDirectory() as directory:
     assert not scope["_matches_fingerprint"](args, transported, code_file=code_file)
 
 print("Cache resumes unchanged inputs and rejects changed basis, pairs, image, fitted map, and missing fingerprint.")
+print("Alignment accepts valid direct rows with alignment-only options and rejects changed direct inputs.")
